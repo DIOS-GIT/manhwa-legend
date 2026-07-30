@@ -1,26 +1,46 @@
-# Convertite en Leyenda — motor de historias interactivas
+# Convertite en Leyenda — motor v2 (protagonistas + rutas)
 
-Estructura tipo "Copero" pero de historia lineal por capítulos con decisiones
-(elegí tu propia aventura), armada sobre Firebase + GitHub Pages, sin build
-tools — mismo stack que tus otros proyectos.
+## Qué cambió respecto a la v1
 
-## Estructura de archivos
+- Nuevo flujo de arranque: el jugador elige **Protagonista** (con sus propias
+  stats iniciales) y después **Ruta** (Vanilla / NTR) — recién ahí entra al
+  primer capítulo. Ya no hay un `firstChapterId` único por historia: cada
+  combinación Protagonista + Ruta define su propio capítulo de arranque.
+- Trabajo, vivienda y harem/FMC **no son pantallas nuevas**: se resuelven como
+  capítulos normales con decisiones (`choices`), igual que cualquier otro
+  punto de la trama. Así aprovechamos el mismo motor sin duplicar lógica.
+- `choices` ahora soporta, además de `effects` (suma a stats numéricos):
+  - `setFlags`: asigna directamente valores de texto/booleanos
+    (ej: `{"job": "detective"}`, `{"housing": "departamento-compartido"}`).
+  - `requires` acepta `{"equals": valor}` para chequear flags, además del
+    `{"min", "max"}` de siempre para stats numéricos.
+
+## Estructura de archivos (igual que antes + protagonistas)
 
 ```
-/index.html          → pantalla del jugador
-/admin.html           → panel de carga de contenido (requiere login)
+/index.html
+/admin.html
 /js/firebase-config.js
-/js/story-engine.js   → motor: estado, stats, decisiones, finales (sin UI)
-/js/main.js           → pinta capítulos y decisiones en pantalla
-/js/admin.js           → CRUD de historias / capítulos / finales
+/js/story-engine.js   → motor v2
+/js/main.js            → agrega pantallas de selección de protagonista/ruta
+/js/admin.js           → agrega CRUD de protagonistas
 /css/styles.css
+/css/additions.css     → PEGAR su contenido al final de styles.css
 ```
 
 ## Modelo de datos (Firestore)
 
 ```
 stories/{storyId}
-  title, ageRating, statKeys[], status, firstChapterId
+  title, ageRating, statKeys[], status
+
+stories/{storyId}/protagonists/{protagonistId}
+  name, description, imageUrl
+  baseStats: { statKey: number, ... }
+  routes: {
+    vanilla: { startChapterId: "cap-vanilla-1" },
+    ntr:     { startChapterId: "cap-ntr-1" }
+  }
 
 stories/{storyId}/chapters/{chapterId}
   order, title, sceneText, imageUrl, contentWarnings[],
@@ -29,9 +49,12 @@ stories/{storyId}/chapters/{chapterId}
   choices: [{
     id, text,
     nextChapterId | nextEndingId,
-    effects: { statKey: number, ... },       // ej: { "honor": 2 }
-    requires: { statKey: { min, max } }       // opcional: oculta la choice
-                                                // si el jugador no cumple
+    effects:  { statKey: number, ... },     // suma a stats
+    setFlags: { flagKey: valor, ... },       // asigna flags (texto/booleano) — NUEVO
+    requires: {
+      statKey: { min, max },                 // chequeo numérico, como antes
+      flagKey: { equals: valor }             // chequeo de flag — NUEVO
+    }
   }]
 
 stories/{storyId}/endings/{endingId}
@@ -40,111 +63,64 @@ stories/{storyId}/endings/{endingId}
   priority
 ```
 
-El **motor no sabe nada del contenido**: todo el texto, imágenes y ramas
-narrativas se cargan desde `admin.html`. Podés tener historias de distinta
-clasificación de edad (`ageRating: "13+" | "16+" | "18+"`) usando exactamente
-el mismo motor.
-
-## Reglas de seguridad recomendadas (Firestore)
-
-Igual patrón de roles que usás en Punto Frío Bocagrande: un documento en
-`/admins/{uid}` habilita edición.
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-
-    match /stories/{storyId} {
-      allow read: if resource.data.status == "publicado" || isAdmin();
-      allow write: if isAdmin();
-
-      match /chapters/{chapterId} {
-        allow read: if true;
-        allow write: if isAdmin();
-      }
-      match /endings/{endingId} {
-        allow read: if true;
-        allow write: if isAdmin();
-      }
-    }
-
-    match /admins/{uid} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false; // se crea manualmente desde la consola de Firebase
-    }
-
-    function isAdmin() {
-      return request.auth != null &&
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
-    }
-  }
-}
-```
-
-Para dar de alta a un admin: creá manualmente en la consola de Firebase un
-documento `admins/{uid_del_usuario}` con cualquier campo (ej. `{ role: "editor" }`).
-
-## Clasificación de edad y verificación (+18)
-
-El motor deja el campo `ageRating` a nivel de historia y `contentWarnings` a
-nivel de capítulo, pero **no implementa verificación de edad real** — eso lo
-tienen que decidir ustedes según dónde publiquen. Dos caminos comunes:
-
-1. **Gate simple**: un interstitial antes de `index.html` que pide confirmar
-   mayoría de edad (`localStorage` flag), sin validación real — rápido pero débil.
-2. **Verificación real**: requiere un proveedor externo de verificación de edad
-   o, como mínimo, login obligatorio con fecha de nacimiento almacenada. Si van
-   a publicar esto públicamente (no solo para uso interno del equipo), les
-   recomiendo investigar los requisitos legales de verificación de edad para
-   contenido +18 en las jurisdicciones donde lo van a distribuir — varían
-   bastante y siguen cambiando.
-
-## Formato de decisiones (JSON) que carga el equipo de escritores
+## Ejemplo de capítulo con selección de trabajo (usando setFlags)
 
 ```json
 [
   {
-    "id": "aceptar",
-    "text": "Aceptar la propuesta del clan rival",
-    "nextChapterId": "cap-04",
-    "effects": { "honor": -1, "poder": 2 }
+    "id": "detective",
+    "text": "Trabajar como detective privado",
+    "nextChapterId": "cap-trabajo-detective-1",
+    "setFlags": { "job": "detective" }
   },
   {
-    "id": "rechazar",
-    "text": "Rechazarla y quedarte leal a tu maestro",
-    "nextChapterId": "cap-05",
-    "effects": { "honor": 2 },
-    "requires": { "honor": { "min": 0 } }
+    "id": "estudiante",
+    "text": "Volver a estudiar en la universidad",
+    "nextChapterId": "cap-estudio-1",
+    "setFlags": { "job": "estudiante" }
   }
 ]
 ```
 
-- `effects` suma/resta a los stats definidos en `statKeys` de la historia.
-- `requires` es opcional: si el jugador no cumple el rango, esa opción no
-  aparece (permite ramas que solo se desbloquean según decisiones previas).
-- Si una choice no tiene `nextChapterId` ni `nextEndingId`, el motor resuelve
-  automáticamente el final que mejor matchea los stats acumulados
-  (usando `condition` + `priority` de cada final).
+Y más adelante, un capítulo que solo aparece si el jugador eligió ser detective:
 
-## Cómo probar localmente
-
-Igual que tus otros proyectos: como usa GitHub Pages sin build tools, podés
-abrirlo con cualquier servidor estático simple, por ejemplo:
-
-```bash
-npx serve .
+```json
+{
+  "requires": { "job": { "equals": "detective" } }
+}
 ```
 
-Y recordá el issue que ya conocés: el CDN de GitHub Pages cachea agresivo,
-así que testeá cambios recientes en incógnito.
+## Reglas de seguridad de Firestore (agregar protagonists)
 
-## Próximos pasos sugeridos
+Agregar este bloque dentro de `match /stories/{storyId} { ... }`, junto a
+`chapters` y `endings` que ya tenías:
 
-- [ ] Cargar `firebase-config.js` con las credenciales reales del proyecto
-- [ ] Crear el primer usuario admin en Firestore (`admins/{uid}`)
-- [ ] Publicar las reglas de seguridad de arriba
-- [ ] Cargar una historia de prueba corta (3-4 capítulos) para validar el flujo
-- [ ] Decidir el mecanismo de verificación de edad antes de publicar contenido +18
-- [ ] (Opcional) Agregar Cloudinary para las imágenes de cada capítulo, mismo
-      patrón que usás en agencia-de-turismo
+```
+match /protagonists/{protagonistId} {
+  allow read: if true;
+  allow write: if isAdmin();
+}
+```
+
+## Pendiente: gestión de administradores desde el panel
+
+Se decidió que el admin principal pueda dar permisos a otros usuarios desde
+una pestaña del panel (en vez de hacerlo a mano en la consola de Firebase).
+Esto requiere una **Cloud Function** (porque las reglas de Firestore no
+permiten que un cliente escriba en `/admins/{uid}` de otro usuario por
+seguridad). Para desplegar Cloud Functions:
+
+1. El proyecto de Firebase debe estar en el plan **Blaze** (pago por uso —
+   el uso real de esta función específica cuesta prácticamente $0).
+2. Se necesita Node.js + Firebase CLI instalados y usar la terminal para
+   `firebase deploy --only functions`.
+
+Queda pendiente como siguiente paso, a definir si se hace ahora o más
+adelante.
+
+## Cloudinary (imágenes)
+
+Pendiente de conectar: subir imagen desde el panel admin directo a
+Cloudinary (unsigned upload) y auto-completar el campo `imageUrl` del
+capítulo/protagonista/final. Falta el Cloud name y el Upload preset del
+usuario para integrarlo.
