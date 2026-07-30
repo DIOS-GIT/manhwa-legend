@@ -68,7 +68,40 @@
   </div>
 
   <div class="admin-card">
+    <h3>Protagonistas</h3>
+    <p style="color:var(--parchment-dim); font-size:12px;">
+      Cada protagonista define sus propias stats iniciales y el capítulo donde arranca
+      cada ruta (Vanilla / NTR). El jugador elige protagonista y luego ruta antes de
+      entrar a la historia.
+    </p>
+    <div id="protagonist-list"></div>
+
+    <hr style="border-color:#241E24; margin:16px 0;">
+    <form id="protagonist-form">
+      <input type="hidden" id="protagonist-id">
+      <label>Nombre</label>
+      <input type="text" id="protagonist-name" required>
+      <label>Descripción corta</label>
+      <textarea id="protagonist-description"></textarea>
+      <label>URL de imagen</label>
+      <input type="text" id="protagonist-image">
+      <label>Stats base (JSON, ej: {"carisma":2,"poder":0})</label>
+      <textarea id="protagonist-basestats" placeholder='{"carisma":0,"honor":0,"poder":0}'></textarea>
+      <label>ID del capítulo de arranque — Ruta Vanilla</label>
+      <input type="text" id="protagonist-route-vanilla" placeholder="cap-vanilla-1">
+      <label>ID del capítulo de arranque — Ruta NTR</label>
+      <input type="text" id="protagonist-route-ntr" placeholder="cap-ntr-1">
+      <button type="submit">Guardar protagonista</button>
+      <button type="button" id="protagonist-form-reset" class="secondary">Nuevo / limpiar</button>
+    </form>
+  </div>
+
+  <div class="admin-card">
     <h3>Capítulos</h3>
+    <p style="color:var(--parchment-dim); font-size:12px;">
+      El primer capítulo de cada ruta ya NO se marca acá — se define en el protagonista
+      de arriba. Los capítulos siguientes se encadenan igual que siempre (nextChapterId).
+    </p>
     <div id="chapter-list"></div>
 
     <hr style="border-color:#241E24; margin:16px 0;">
@@ -88,8 +121,8 @@
         <input type="checkbox" id="chapter-is-ending">
         <label style="margin:0;">Este capítulo es un final</label>
       </div>
-      <label>Decisiones (JSON — ver formato en README)</label>
-      <textarea id="chapter-choices" placeholder='[{"id":"a","text":"...","nextChapterId":"cap-2","effects":{"honor":1}}]'></textarea>
+      <label>Decisiones (JSON — ver formato en README. Ahora acepta también "setFlags" y requires con "equals")</label>
+      <textarea id="chapter-choices" placeholder='[{"id":"a","text":"...","nextChapterId":"cap-2","effects":{"honor":1},"setFlags":{"job":"detective"}}]'></textarea>
       <button type="submit">Guardar capítulo</button>
       <button type="button" id="chapter-form-reset" class="secondary">Nuevo / limpiar</button>
     </form>
