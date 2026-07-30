@@ -11,13 +11,13 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAMFa0z-_EyIGxVd5cJYd4ITUnRLu0",
+  apiKey: "AIzaSyA9NfaGr-_-EylGxVd5c5_iYd6ITUnRLu0",
   authDomain: "juego-manhwa-18.firebaseapp.com",
   projectId: "juego-manhwa-18",
   storageBucket: "juego-manhwa-18.firebasestorage.app",
   messagingSenderId: "1024334256442",
   appId: "1:1024334256442:web:508ed2ef808d141bd59803",
-  measurementId: "G-PPWFR8KVG5"
+  measurementId: "G-PPWFR8KVGS"
 };
 
 const app = initializeApp(firebaseConfig);
