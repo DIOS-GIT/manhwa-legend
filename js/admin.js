@@ -1,7 +1,4 @@
-// admin.js — panel de administración de contenido.
-// Requiere Firebase Auth (mismo patrón de roles que Punto Frío Bocagrande:
-// solo usuarios con doc en /admins/{uid} pueden escribir).
-
+// admin.js — v2 (agrega gestión de Protagonistas)
 import { db, auth } from "./firebase-config.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, getDocs, getDoc, setDoc
@@ -14,6 +11,7 @@ const loginView = document.getElementById("login-view");
 const adminView = document.getElementById("admin-view");
 const storySelect = document.getElementById("story-select");
 const chapterList = document.getElementById("chapter-list");
+const protagonistList = document.getElementById("protagonist-list");
 
 // ---------------- Auth ----------------
 
@@ -36,7 +34,6 @@ onAuthStateChanged(auth, async (user) => {
     adminView.style.display = "none";
     return;
   }
-  // Chequeo de rol: solo usuarios listados en /admins/{uid} pueden editar contenido
   const adminDoc = await getDoc(doc(db, "admins", user.uid));
   if (!adminDoc.exists()) {
     alert("Tu cuenta no tiene permisos de administrador de contenido.");
@@ -59,7 +56,10 @@ async function refreshStoryList() {
     opt.textContent = `${d.data().title} (${d.data().status || "borrador"})`;
     storySelect.appendChild(opt);
   });
-  if (storySelect.value) loadChapters(storySelect.value);
+  if (storySelect.value) {
+    loadChapters(storySelect.value);
+    loadProtagonists(storySelect.value);
+  }
 }
 
 document.getElementById("new-story-form").addEventListener("submit", async (e) => {
@@ -70,20 +70,103 @@ document.getElementById("new-story-form").addEventListener("submit", async (e) =
   const statKeys = statKeysRaw.split(",").map((s) => s.trim()).filter(Boolean);
 
   const ref = await addDoc(collection(db, "stories"), {
-    title,
-    ageRating,
-    statKeys,
-    status: "borrador",
-    firstChapterId: null,
-    createdAt: Date.now()
+    title, ageRating, statKeys, status: "borrador", createdAt: Date.now()
   });
 
-  alert(`Historia creada. ID: ${ref.id}\nAhora agregá capítulos.`);
+  alert(`Historia creada. ID: ${ref.id}\nAhora agregá protagonistas y capítulos.`);
   e.target.reset();
   refreshStoryList();
 });
 
-storySelect.addEventListener("change", () => loadChapters(storySelect.value));
+storySelect.addEventListener("change", () => {
+  loadChapters(storySelect.value);
+  loadProtagonists(storySelect.value);
+});
+
+// ---------------- Protagonistas ----------------
+
+async function loadProtagonists(storyId) {
+  protagonistList.innerHTML = "Cargando...";
+  const snap = await getDocs(collection(db, "stories", storyId, "protagonists"));
+  const protagonists = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+  protagonistList.innerHTML = "";
+  protagonists.forEach((p) => {
+    const row = document.createElement("div");
+    row.className = "admin-row";
+    row.innerHTML = `
+      <strong>${p.name}</strong>
+      <span class="tag">${Object.keys(p.baseStats || {}).length} stats</span>
+      <button data-id="${p.id}" class="edit-protagonist-btn">Editar</button>
+      <button data-id="${p.id}" class="delete-protagonist-btn">Eliminar</button>
+    `;
+    protagonistList.appendChild(row);
+  });
+
+  protagonistList.querySelectorAll(".delete-protagonist-btn").forEach((btn) =>
+    btn.addEventListener("click", async () => {
+      if (!confirm("¿Eliminar este protagonista?")) return;
+      await deleteDoc(doc(db, "stories", storyId, "protagonists", btn.dataset.id));
+      loadProtagonists(storyId);
+    })
+  );
+
+  protagonistList.querySelectorAll(".edit-protagonist-btn").forEach((btn) =>
+    btn.addEventListener("click", () => loadProtagonistIntoForm(storyId, btn.dataset.id))
+  );
+}
+
+async function loadProtagonistIntoForm(storyId, protagonistId) {
+  const snap = await getDoc(doc(db, "stories", storyId, "protagonists", protagonistId));
+  const data = snap.data();
+  document.getElementById("protagonist-id").value = protagonistId;
+  document.getElementById("protagonist-name").value = data.name ?? "";
+  document.getElementById("protagonist-description").value = data.description ?? "";
+  document.getElementById("protagonist-image").value = data.imageUrl ?? "";
+  document.getElementById("protagonist-basestats").value = JSON.stringify(data.baseStats || {}, null, 2);
+  document.getElementById("protagonist-route-vanilla").value = data.routes?.vanilla?.startChapterId ?? "";
+  document.getElementById("protagonist-route-ntr").value = data.routes?.ntr?.startChapterId ?? "";
+}
+
+document.getElementById("protagonist-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const storyId = storySelect.value;
+  const protagonistId = document.getElementById("protagonist-id").value;
+
+  let baseStats = {};
+  try {
+    baseStats = JSON.parse(document.getElementById("protagonist-basestats").value || "{}");
+  } catch (err) {
+    return alert("El JSON de stats base tiene un error: " + err.message);
+  }
+
+  const payload = {
+    name: document.getElementById("protagonist-name").value,
+    description: document.getElementById("protagonist-description").value,
+    imageUrl: document.getElementById("protagonist-image").value || null,
+    baseStats,
+    routes: {
+      vanilla: { startChapterId: document.getElementById("protagonist-route-vanilla").value || null },
+      ntr: { startChapterId: document.getElementById("protagonist-route-ntr").value || null }
+    }
+  };
+
+  if (protagonistId) {
+    await updateDoc(doc(db, "stories", storyId, "protagonists", protagonistId), payload);
+  } else {
+    await addDoc(collection(db, "stories", storyId, "protagonists"), payload);
+  }
+
+  alert("Protagonista guardado.");
+  e.target.reset();
+  document.getElementById("protagonist-id").value = "";
+  loadProtagonists(storyId);
+});
+
+document.getElementById("protagonist-form-reset").addEventListener("click", () => {
+  document.getElementById("protagonist-form").reset();
+  document.getElementById("protagonist-id").value = "";
+});
 
 // ---------------- Capítulos ----------------
 
@@ -161,15 +244,12 @@ document.getElementById("chapter-form").addEventListener("submit", async (e) => 
   if (chapterId) {
     await updateDoc(doc(db, "stories", storyId, "chapters", chapterId), payload);
   } else {
-    const ref = await addDoc(collection(db, "stories", storyId, "chapters"), payload);
-    // Si es el primer capítulo de la historia, lo seteamos como firstChapterId
-    const storySnap = await getDoc(doc(db, "stories", storyId));
-    if (!storySnap.data().firstChapterId) {
-      await updateDoc(doc(db, "stories", storyId), { firstChapterId: ref.id });
-    }
+    await addDoc(collection(db, "stories", storyId, "chapters"), payload);
   }
 
-  alert("Capítulo guardado.");
+  alert("Capítulo guardado. Recordá: los capítulos ya NO se encadenan automáticamente desde " +
+    "un 'primer capítulo' de la historia — el punto de arranque ahora lo define cada " +
+    "Protagonista + Ruta (ver tab Protagonistas).");
   e.target.reset();
   document.getElementById("chapter-id").value = "";
   loadChapters(storyId);
