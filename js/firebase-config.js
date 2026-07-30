@@ -1,5 +1,14 @@
-// Configuración real de Firebase para el proyecto "manhwa-legend"
-// Reemplazá el contenido de tu archivo js/firebase-config.js por este.
+// firebase-config.js
+// Configuración central de Firebase. Reemplazá los valores con los de tu proyecto
+// (mismo patrón que agencia-de-turismo / Punto Frío Bocagrande).
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import {
+  getFirestore
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+import {
+  getAuth
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAMFa0z-_EyIGxVd5cJYd4ITUnRLu0",
@@ -11,16 +20,6 @@ const firebaseConfig = {
   measurementId: "G-PPWFR8KVG5"
 };
 
-// Si tu archivo original usa imports tipo módulo (Firebase v9+ modular),
-// dejalo así y asegurate de que main.js / admin.js importen y usen
-// este mismo objeto para inicializar la app:
-//
-//   import { initializeApp } from "firebase/app";
-//   const app = initializeApp(firebaseConfig);
-//
-// Si tu proyecto usa la versión "compat" (scripts <script> directos),
-// el patrón sería:
-//
-//   firebase.initializeApp(firebaseConfig);
-
-export { firebaseConfig };
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
+export const auth = getAuth(app);
