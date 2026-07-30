@@ -1,59 +1,39 @@
-// story-engine.js
-// Motor central del juego. No conoce nada de UI ni de contenido narrativo:
-// solo sabe cargar capítulos desde Firestore, aplicar efectos de las
-// decisiones sobre el estado del jugador, y resolver el final correspondiente.
+// story-engine.js — v2
+// Ahora soporta: selección de protagonista (con stats propias), selección
+// de ruta (ntr/vanilla) que decide el capítulo de arranque, y "flags"
+// (banderas de texto/booleanas: job, housing, route, harem, etc.) además
+// de los stats numéricos que ya existían.
 //
-// El contenido (textos, imágenes, decisiones, finales) vive 100% en Firestore
-// y lo carga el equipo desde el panel admin. Este archivo es reutilizable
-// para cualquier historia, con cualquier temática o clasificación de edad.
+// El motor sigue sin saber nada del CONTENIDO (texto, imágenes) — eso vive
+// 100% en Firestore y lo carga el equipo desde admin.html.
 
 import { db } from "./firebase-config.js";
 import {
   doc,
   getDoc,
   collection,
-  getDocs,
-  query,
-  where
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const STORAGE_KEY_PREFIX = "manhwa-legend:progress:";
 
 /**
- * Forma esperada de un documento de capítulo en Firestore:
- * stories/{storyId}/chapters/{chapterId}
+ * stories/{storyId}/protagonists/{protagonistId}
  * {
- *   order: number,
- *   title: string,
- *   sceneText: string,
- *   imageUrl: string | null,
- *   ageRating: "13+" | "16+" | "18+",
- *   contentWarnings: string[],       // ej: ["violencia", "temática adulta"]
- *   isEnding: boolean,
- *   endingId: string | null,         // solo si isEnding = true
- *   choices: [
- *     {
- *       id: string,
- *       text: string,
- *       nextChapterId: string | null,  // null si esta choice lleva directo a un final
- *       nextEndingId: string | null,
- *       effects: { [statKey: string]: number },  // ej: { carisma: 2, honor: -1 }
- *       requires: { [statKey: string]: { min?: number, max?: number } } // opcional, gating
- *     }
- *   ]
+ *   name, description, imageUrl,
+ *   baseStats: { statKey: number, ... },
+ *   routes: {
+ *     ntr:     { startChapterId: "cap-ntr-1" },
+ *     vanilla: { startChapterId: "cap-vanilla-1" }
+ *   }
  * }
  *
- * Forma esperada de un final:
- * stories/{storyId}/endings/{endingId}
- * {
- *   title: string,
- *   description: string,
- *   imageUrl: string,
- *   // condición para que este final se elija automáticamente cuando isEnding
- *   // se resuelve por stats en vez de por choice explícita:
- *   condition: { [statKey: string]: { min?: number, max?: number } },
- *   priority: number // finales con mayor prioridad se evalúan primero
- * }
+ * choice.requires ahora acepta, por cada key:
+ *   - { min, max }     → chequea contra state.stats[key] (numérico, como antes)
+ *   - { equals: val }  → chequea contra state.flags[key] (texto/booleano)
+ *
+ * choice.setFlags (nuevo, opcional): { job: "detective", route: "ntr" }
+ *   asigna directamente esos valores a state.flags (no suma, reemplaza).
  */
 
 export class StoryEngine {
@@ -67,22 +47,19 @@ export class StoryEngine {
     return {
       storyId: this.storyId,
       currentChapterId: null,
-      stats: {},          // se inicializa según defaultStats de la historia
-      history: [],         // [{chapterId, choiceId, text}]
-      flags: {},           // banderas booleanas para gating narrativo
+      stats: {},
+      flags: {},          // route, job, housing, protagonistId, harem, etc.
+      history: [],
       startedAt: Date.now(),
       finished: false,
       endingId: null
     };
   }
 
-  // ---------- Persistencia local (progreso del jugador, sin login) ----------
+  // ---------- Persistencia local ----------
 
   saveProgress() {
-    localStorage.setItem(
-      STORAGE_KEY_PREFIX + this.storyId,
-      JSON.stringify(this.state)
-    );
+    localStorage.setItem(STORAGE_KEY_PREFIX + this.storyId, JSON.stringify(this.state));
   }
 
   loadProgress() {
@@ -97,17 +74,42 @@ export class StoryEngine {
     this.state = this._freshState();
   }
 
-  // ---------- Carga de contenido ----------
+  // ---------- Carga de metadata / protagonistas ----------
 
   async loadStoryMeta() {
     const snap = await getDoc(this.storyRef);
     if (!snap.exists()) throw new Error(`Historia "${this.storyId}" no existe`);
     this.meta = snap.data();
-    // Inicializa stats en 0 según lo definido por la historia
-    if (Object.keys(this.state.stats).length === 0) {
-      (this.meta.statKeys || []).forEach((key) => (this.state.stats[key] = 0));
-    }
     return this.meta;
+  }
+
+  async getProtagonists() {
+    const snap = await getDocs(collection(db, "stories", this.storyId, "protagonists"));
+    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  }
+
+  /** Paso 1 del onboarding: elegir protagonista → carga sus stats base */
+  async selectProtagonist(protagonistId) {
+    const snap = await getDoc(doc(db, "stories", this.storyId, "protagonists", protagonistId));
+    if (!snap.exists()) throw new Error(`Protagonista "${protagonistId}" no existe`);
+    this._protagonist = { id: snap.id, ...snap.data() };
+    this.state.flags.protagonistId = protagonistId;
+    this.state.stats = { ...(this._protagonist.baseStats || {}) };
+    this.saveProgress();
+    return this._protagonist;
+  }
+
+  /** Paso 2 del onboarding: elegir ruta (ntr/vanilla) → decide el capítulo de arranque */
+  async selectRouteAndStart(route) {
+    if (!this._protagonist) throw new Error("Primero hay que elegir un protagonista");
+    this.state.flags.route = route;
+    const routeInfo = (this._protagonist.routes || {})[route];
+    if (!routeInfo || !routeInfo.startChapterId) {
+      throw new Error(`La ruta "${route}" no tiene capítulo de arranque configurado`);
+    }
+    this.state.currentChapterId = routeInfo.startChapterId;
+    this.saveProgress();
+    return this.getChapter(this.state.currentChapterId);
   }
 
   async getChapter(chapterId) {
@@ -125,42 +127,29 @@ export class StoryEngine {
   }
 
   async getAllEndings() {
-    const snap = await getDocs(
-      collection(db, "stories", this.storyId, "endings")
-    );
+    const snap = await getDocs(collection(db, "stories", this.storyId, "endings"));
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
 
-  async start() {
-    if (!this.meta) await this.loadStoryMeta();
-    this.state.currentChapterId = this.meta.firstChapterId;
-    this.saveProgress();
-    return this.getChapter(this.state.currentChapterId);
-  }
+  // ---------- Decisiones ----------
 
-  // ---------- Lógica de decisiones ----------
-
-  /** Devuelve solo las choices que el jugador puede tomar según sus stats actuales */
   getAvailableChoices(chapter) {
-    return (chapter.choices || []).filter((choice) =>
-      this._meetsRequirements(choice.requires)
-    );
+    return (chapter.choices || []).filter((choice) => this._meetsRequirements(choice.requires));
   }
 
   _meetsRequirements(requires) {
     if (!requires) return true;
-    return Object.entries(requires).every(([statKey, range]) => {
-      const value = this.state.stats[statKey] ?? 0;
-      if (range.min !== undefined && value < range.min) return false;
-      if (range.max !== undefined && value > range.max) return false;
+    return Object.entries(requires).every(([key, cond]) => {
+      if (cond && typeof cond === "object" && "equals" in cond) {
+        return (this.state.flags[key] ?? null) === cond.equals;
+      }
+      const value = this.state.stats[key] ?? 0;
+      if (cond.min !== undefined && value < cond.min) return false;
+      if (cond.max !== undefined && value > cond.max) return false;
       return true;
     });
   }
 
-  /**
-   * Aplica una decisión: suma los efectos a los stats, guarda historial,
-   * y devuelve el siguiente paso (capítulo o final).
-   */
   async applyChoice(chapter, choiceId) {
     const choice = (chapter.choices || []).find((c) => c.id === choiceId);
     if (!choice) throw new Error(`Choice "${choiceId}" no existe en este capítulo`);
@@ -169,27 +158,24 @@ export class StoryEngine {
       this.state.stats[statKey] = (this.state.stats[statKey] ?? 0) + delta;
     });
 
-    this.state.history.push({
-      chapterId: chapter.id,
-      choiceId: choice.id,
-      text: choice.text
-    });
-
-    if (choice.nextEndingId) {
-      return this._resolveEnding(choice.nextEndingId);
+    if (choice.setFlags) {
+      Object.entries(choice.setFlags).forEach(([flagKey, value]) => {
+        this.state.flags[flagKey] = value;
+      });
     }
+
+    this.state.history.push({ chapterId: chapter.id, choiceId: choice.id, text: choice.text });
+
+    if (choice.nextEndingId) return this._resolveEnding(choice.nextEndingId);
 
     if (choice.nextChapterId) {
       this.state.currentChapterId = choice.nextChapterId;
       this.saveProgress();
       const nextChapter = await this.getChapter(choice.nextChapterId);
-      if (nextChapter.isEnding) {
-        return this._resolveEnding(nextChapter.endingId);
-      }
+      if (nextChapter.isEnding) return this._resolveEnding(nextChapter.endingId);
       return { type: "chapter", data: nextChapter };
     }
 
-    // Si la choice no define next explícito, se resuelve el final por stats
     return this._resolveEndingByStats();
   }
 
@@ -201,20 +187,18 @@ export class StoryEngine {
     return { type: "ending", data: ending };
   }
 
-  /** Cuando no hay un final explícito, se elige el que mejor matchea los stats finales */
   async _resolveEndingByStats() {
     const endings = await this.getAllEndings();
     const sorted = endings.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-    const match =
-      sorted.find((e) => this._meetsRequirements(e.condition)) || sorted[sorted.length - 1];
+    const match = sorted.find((e) => this._meetsRequirements(e.condition)) || sorted[sorted.length - 1];
     return this._resolveEnding(match.id);
   }
-
-  // ---------- Tarjeta de resultado ----------
 
   buildResultCard() {
     return {
       storyTitle: this.meta?.title,
+      protagonistName: this._protagonist?.name,
+      route: this.state.flags.route,
       endingId: this.state.endingId,
       stats: { ...this.state.stats },
       decisionsCount: this.state.history.length,
