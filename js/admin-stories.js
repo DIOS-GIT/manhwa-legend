@@ -1,10 +1,19 @@
 // admin-stories.js — login + sección "Historias"
+//
+// OJO: esta página (admin.html) es la ÚNICA que NO usa requireAdmin() de
+// admin-shared.js, porque requireAdmin() redirige a admin.html cuando no hay
+// sesión — y como esta ES admin.html, eso causaba un bucle infinito de
+// redirecciones (la página se recargaba sola sin parar y de paso cortaba la
+// descarga del CSS a mitad de camino). Acá el chequeo de sesión se hace en
+// el lugar, sin redirigir nunca.
 import { db, auth } from "./firebase-config.js";
 import {
-  collection, doc, addDoc, updateDoc, deleteDoc, getDocs
+  collection, doc, getDoc, addDoc, updateDoc, deleteDoc, getDocs
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-import { signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-import { requireAdmin, wireLogout, renderAdminNav, populateStorySelect, setActiveStoryId } from "./admin-shared.js";
+import {
+  signInWithEmailAndPassword, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { wireLogout, renderAdminNav, populateStorySelect, setActiveStoryId } from "./admin-shared.js";
 
 const loginView = document.getElementById("login-view");
 const adminView = document.getElementById("admin-view");
@@ -22,13 +31,23 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
   }
 });
 
-onAuthStateChanged(auth, (user) => {
-  // Este listener solo controla qué vista mostrar en ESTA página (login vs panel).
-  // El chequeo real de permisos de admin lo hace requireAdmin() más abajo.
-  loginView.style.display = user ? "none" : "block";
-});
+onAuthStateChanged(auth, async (user) => {
+  if (!user) {
+    loginView.style.display = "block";
+    adminView.style.display = "none";
+    return;
+  }
 
-requireAdmin(async () => {
+  const adminDoc = await getDoc(doc(db, "admins", user.uid));
+  if (!adminDoc.exists()) {
+    alert("Tu cuenta no tiene permisos de administrador de contenido.");
+    await signOut(auth);
+    loginView.style.display = "block";
+    adminView.style.display = "none";
+    return;
+  }
+
+  loginView.style.display = "none";
   adminView.style.display = "block";
   wireLogout();
   renderAdminNav("stories");
