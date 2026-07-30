@@ -1,0 +1,33 @@
+/* additions.css — pegar este bloque al FINAL de tu css/styles.css existente.
+   Es solo el estilo para la nueva grilla de selección de protagonista;
+   no toca nada de lo que ya tenías. */
+
+.protagonist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.protagonist-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 14px;
+  gap: 6px;
+}
+
+.protagonist-card img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  border-radius: 2px;
+  margin-bottom: 6px;
+}
+
+.protagonist-card p {
+  font-size: 12px;
+  opacity: 0.8;
+  margin: 0;
+}
