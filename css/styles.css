@@ -1,172 +1,33 @@
-/* ===========================================================
-   Paleta y tipografía — identidad "webtoon nocturno"
-   =========================================================== */
-:root {
-  --ink-black: #100D12;
-  --panel-dark: #1A151C;
-  --crimson: #C23B4B;
-  --crimson-dim: #7A2530;
-  --gold: #D8A857;
-  --parchment: #EFE7DC;
-  --parchment-dim: #B8AFA4;
+/* additions.css — pegar este bloque al FINAL de tu css/styles.css existente.
+   Es solo el estilo para la nueva grilla de selección de protagonista;
+   no toca nada de lo que ya tenías. */
 
-  --font-display: "Anton", "Arial Narrow", sans-serif;
-  --font-body: "Noto Sans", "Segoe UI", sans-serif;
-
-  --radius: 2px;
+.protagonist-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
 }
 
-* { box-sizing: border-box; }
-
-body {
-  margin: 0;
-  background: var(--ink-black);
-  color: var(--parchment);
-  font-family: var(--font-body);
-  line-height: 1.6;
-}
-
-/* ===========================================================
-   Estructura de "panel" — el marco visual repetido, como una
-   viñeta de manhwa con lomo de tinta a la izquierda
-   =========================================================== */
-.panel-deck {
-  max-width: 620px;
-  margin: 0 auto;
-  padding: 24px 20px 80px;
-}
-
-.chapter-panel {
-  position: relative;
-  background: var(--panel-dark);
-  border-left: 4px solid var(--crimson);
-  padding: 28px 24px;
-  margin-bottom: 18px;
-  border-radius: var(--radius);
-  animation: panel-in 0.35s ease-out;
-}
-
-.chapter-panel::before {
-  content: attr(data-chapter-num);
-  position: absolute;
-  top: -12px;
-  left: -4px;
-  background: var(--crimson);
-  color: var(--ink-black);
-  font-family: var(--font-display);
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  padding: 3px 10px;
-}
-
-@keyframes panel-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.chapter-panel img {
-  width: 100%;
-  border-radius: var(--radius);
-  margin-bottom: 16px;
-  display: block;
-}
-
-.chapter-panel h2 {
-  font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: 0.02em;
-  font-size: 24px;
-  margin: 0 0 12px;
-  color: var(--parchment);
-}
-
-.chapter-panel p {
-  color: var(--parchment-dim);
-  font-size: 15px;
-  margin: 0;
-}
-
-.content-warning {
-  display: inline-block;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--gold);
-  border: 1px solid var(--gold);
-  padding: 2px 8px;
-  border-radius: var(--radius);
-  margin-bottom: 14px;
-}
-
-/* ===========================================================
-   Decisiones — botones tipo "globo de diálogo cortado"
-   =========================================================== */
-.choices {
+.protagonist-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 20px;
-}
-
-.choice-btn {
-  position: relative;
-  background: var(--ink-black);
-  border: 1px solid var(--crimson-dim);
-  color: var(--parchment);
-  font-family: var(--font-body);
-  font-size: 14.5px;
-  text-align: left;
-  padding: 14px 18px;
-  cursor: pointer;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.choice-btn:hover {
-  border-color: var(--crimson);
-  background: #241A1F;
-}
-
-.choice-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* ===========================================================
-   Tarjeta de resultado final
-   =========================================================== */
-.result-card {
-  background: linear-gradient(160deg, var(--panel-dark), var(--ink-black));
-  border: 1px solid var(--gold);
-  padding: 32px 24px;
+  align-items: center;
   text-align: center;
-  border-radius: var(--radius);
+  padding: 14px;
+  gap: 6px;
 }
 
-.result-card h1 {
-  font-family: var(--font-display);
-  font-size: 30px;
-  color: var(--gold);
-  margin: 0 0 8px;
+.protagonist-card img {
+  width: 100%;
+  aspect-ratio: 3/4;
+  object-fit: cover;
+  border-radius: 2px;
+  margin-bottom: 6px;
 }
 
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  color: var(--parchment-dim);
-  border-bottom: 1px solid #2A232A;
-  padding: 6px 0;
-}
-
-.share-btn {
-  margin-top: 20px;
-  background: var(--crimson);
-  color: var(--ink-black);
-  border: none;
-  font-family: var(--font-display);
-  letter-spacing: 0.04em;
-  padding: 12px 24px;
-  cursor: pointer;
-  border-radius: var(--radius);
+.protagonist-card p {
+  font-size: 12px;
+  opacity: 0.8;
+  margin: 0;
 }
