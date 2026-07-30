@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin · Protagonistas — Convertite en Leyenda</title>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Noto+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/admin.css">
+</head>
+<body>
+
+<div class="admin-wrap">
+  <div class="admin-topbar">
+    <h2>PROTAGONISTAS</h2>
+    <button class="secondary" id="logout-btn">Cerrar sesión</button>
+  </div>
+
+  <nav id="admin-nav" class="admin-nav"></nav>
+
+  <div class="active-story-bar">
+    <span>Historia activa:</span>
+    <select id="story-select"></select>
+  </div>
+
+  <div class="admin-card">
+    <h3>Lista de protagonistas</h3>
+    <p class="helper-text">
+      Cada protagonista define sus propias stats iniciales y el capítulo donde arranca
+      cada ruta (Vanilla / NTR). El jugador elige protagonista y luego ruta antes de
+      entrar a la historia.
+    </p>
+    <div id="protagonist-list"></div>
+  </div>
+
+  <div class="admin-card">
+    <h3 id="protagonist-form-title">Nuevo protagonista</h3>
+    <form id="protagonist-form">
+      <input type="hidden" id="protagonist-id">
+      <label>Nombre</label>
+      <input type="text" id="protagonist-name" required>
+      <label>Características / descripción corta</label>
+      <textarea id="protagonist-description"></textarea>
+
+      <label>Imagen</label>
+      <div class="image-field-row">
+        <input type="text" id="protagonist-image" placeholder="https://... o subí una">
+        <button type="button" id="protagonist-upload-btn" class="upload-btn">Subir imagen</button>
+      </div>
+      <img class="image-preview" data-preview-for="protagonist-image">
+
+      <label>Stats base (JSON, ej: {"carisma":2,"poder":0})</label>
+      <textarea id="protagonist-basestats" placeholder='{"carisma":0,"honor":0,"poder":0}'></textarea>
+      <label>ID del capítulo de arranque — Ruta Vanilla</label>
+      <input type="text" id="protagonist-route-vanilla" placeholder="cap-vanilla-1">
+      <label>ID del capítulo de arranque — Ruta NTR</label>
+      <input type="text" id="protagonist-route-ntr" placeholder="cap-ntr-1">
+      <button type="submit">Guardar protagonista</button>
+      <button type="button" id="protagonist-form-reset" class="secondary">Nuevo / limpiar</button>
+    </form>
+  </div>
+</div>
+
+<script src="https://upload-widget.cloudinary.com/global/all.js" type="text/javascript"></script>
+<script type="module" src="js/admin-protagonists.js"></script>
+</body>
+</html>
